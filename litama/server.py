@@ -16,7 +16,7 @@ from structures import Player, GameState
 
 app = Flask(__name__)
 
-mongodb = MongoClient()
+mongodb = MongoClient(MONGODB_HOST)
 matches = mongodb.litama.matches
 
 stream_queue: Dict[str, List[Union[str, Tuple[str, datetime]]]] = {}
