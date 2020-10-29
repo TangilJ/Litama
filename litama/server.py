@@ -220,7 +220,7 @@ def game_move(match_id: str):
 
 @app.route("/game")
 def game():
-    ret = "REST endpoints for /game/...:<br>"
+    ret = "Endpoints for /game/...:<br>"
     ret += '<br>'.join(str(x) for x in app.url_map._rules if x.rule.startswith("/game/"))
     return ret
 
