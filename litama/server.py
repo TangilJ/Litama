@@ -142,6 +142,8 @@ def add_state_to_stream_queue(match_id: str, object_id: ObjectId, ended=False):
     state_message = json.dumps(state, separators=(',', ':')) + "\n"
     if ended:
         state_message = (state_message, datetime.utcnow())
+    if match_id not in stream_queue:
+        stream_queue[match_id] = []
     stream_queue[match_id].append(state_message)
 
 
