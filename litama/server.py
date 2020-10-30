@@ -3,6 +3,7 @@ import random
 import string
 from typing import Dict, List, Union, Tuple, Optional, Set
 
+import bson
 from bson import ObjectId
 from flask import Flask
 from flask_sockets import Sockets
@@ -106,6 +107,23 @@ def generate_state_dict(match: Dict) -> StateDict:
     }
 
 
+def check_match_id(message_type):
+    def decorator_wrapper(function):
+        def wrapper(match_id, *args):
+            try:
+                return function(match_id, *args)
+            except bson.errors.InvalidId:
+                return {
+                    "messageType": message_type,
+                    "success": False,
+                    "matchId": match_id,
+                    "message": "matchId was in an incorrect format"
+                }
+
+        return wrapper
+    return decorator_wrapper
+
+
 def game_create() -> CommandResponse:
     token = "".join(random.choices(string.ascii_letters + string.digits, k=32))
     color: str = "Blue"
@@ -129,6 +147,7 @@ def game_create() -> CommandResponse:
     }
 
 
+@check_match_id("join")
 def game_join(match_id: str) -> CommandResponse:
     object_id = ObjectId(match_id)
     match = matches.find_one({"_id": object_id})
@@ -182,6 +201,7 @@ def game_join(match_id: str) -> CommandResponse:
     }
 
 
+@check_match_id("state")
 def game_state(match_id: str) -> Union[StateDict, CommandResponse]:
     object_id = ObjectId(match_id)
     match = matches.find_one({"_id": object_id})
@@ -196,6 +216,7 @@ def game_state(match_id: str) -> Union[StateDict, CommandResponse]:
     return generate_state_dict(match)
 
 
+@check_match_id("move")
 def game_move(match_id: str, token: str, move: str, card_name: str) -> CommandResponse:
     object_id = ObjectId(match_id)
     match = matches.find_one({"_id": object_id})
