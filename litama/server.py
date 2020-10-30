@@ -295,8 +295,7 @@ def game_move(match_id: str, token: str, move: str, card_name: str) -> CommandRe
     return {
         "messageType": "move",
         "success": True,
-        "matchId": match_id,
-        "message": "Move made"
+        "matchId": match_id
     }
 
 
