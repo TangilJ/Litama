@@ -27,7 +27,7 @@ matches = mongodb.litama.matches
 
 game_clients: Dict[str, Set[WebSocket]] = {}
 
-StateDict = Dict[str, Union[str, List[str], Dict[str, Union[List[str], str]]]]
+StateDict = Dict[str, Union[bool, str, List[str], Dict[str, Union[List[str], str]]]]
 CommandResponse = Dict[str, Union[bool, str]]
 
 
@@ -40,7 +40,8 @@ def game_socket(ws: WebSocket) -> None:
 
         print(f"Received:`{message}`")
         msg_to_send: Union[StateDict, CommandResponse]
-        broadcast_id = None
+        broadcast_id: Optional[str] = None
+        match_id: str
         if message == "create":
             msg_to_send = game_create()
             match_id = msg_to_send["matchId"]
@@ -248,10 +249,10 @@ def game_move(match_id: str, token: str, move: str, card_name: str) -> CommandRe
         }
 
     if move[0] not in "abdce" or move[1] not in "12345" or move[2] not in "abcde" or move[3] not in "12345":
-        move = None
+        move = "none"
     if card_name not in ALL_CARD_NAMES:
-        card_name = None
-    if move is None or card_name is None:
+        card_name = "none"
+    if move == "none" or card_name == "none":
         return {
             "messageType": "move",
             "success": False,
