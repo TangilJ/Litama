@@ -7,7 +7,7 @@ from structures import Piece, Pos, Card, Player
 Board = List[List[Piece]]
 
 
-def init_game() -> (Board, List[Card], List[Card], Card):
+def init_game() -> Tuple[Board, List[Card], List[Card], Card]:
     board: Board = [[Piece(False, Player.NONE) for _ in range(5)] for _ in range(5)]
 
     for x, y in [(0, 0), (1, 0), (2, 0), (3, 0), (4, 0)]:
