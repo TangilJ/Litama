@@ -1,12 +1,16 @@
 import json
 import random
 import string
-from datetime import datetime
-from typing import Dict, List, Union, Tuple, Optional
+from typing import Dict, List, Union, Tuple, Optional, Set
 
 from bson import ObjectId
-from flask import Flask, Response, request
+from flask import Flask
+from flask_sockets import Sockets
+from geventwebsocket import WebSocketError
 from pymongo import MongoClient
+from gevent import pywsgi
+from geventwebsocket.handler import WebSocketHandler
+from geventwebsocket.websocket import WebSocket
 
 from cards import ALL_CARD_NAMES
 from config import MONGODB_HOST
@@ -15,15 +19,83 @@ from conversions import board_to_str, str_to_board, notation_to_pos, get_card_fr
 from structures import Player, GameState
 
 app = Flask(__name__)
+sockets = Sockets(app)
 
 mongodb = MongoClient(MONGODB_HOST)
 matches = mongodb.litama.matches
 
-stream_queue: Dict[str, List[Union[str, Tuple[str, datetime]]]] = {}
+game_clients: Dict[str, Set[WebSocket]] = {}
+
+StateDict = Dict[str, Union[str, List[str], Dict[str, Union[List[str], str]]]]
+CommandResponse = Dict[str, Union[bool, str]]
 
 
-def generate_state_dict(match: Dict) -> Dict:
+@sockets.route("/")
+def game_socket(ws: WebSocket) -> None:
+    while not ws.closed:
+        message = ws.receive()
+        if message is None:
+            continue
+
+        print(f"Received:`{message}`")
+        msg_to_send: Union[StateDict, CommandResponse]
+        broadcast_id = None
+        if message == "create":
+            msg_to_send = game_create()
+            match_id = msg_to_send["matchId"]
+            add_client_to_map(match_id, ws)
+        elif message.startswith("join "):
+            msg_to_send = game_join(message[5:])
+            if msg_to_send["success"]:
+                match_id = msg_to_send["matchId"]
+                add_client_to_map(match_id, ws)
+                broadcast_id = match_id
+        elif message.startswith("state "):
+            msg_to_send = game_state(message[6:])
+        elif message.startswith("move "):
+            split = message.split(" ")
+            # Command format: move [match_id] [token] [move] [card]
+            # Example: move 5f9c394ee71e1740c218587b iq2V39W9WNm0EZpDqEcqzoLRhSkdD3lY a1b1 boar
+            msg_to_send = game_move(split[1], split[2], split[3], split[4])
+        else:
+            msg_to_send = {
+                "messageType": "invalid",
+                "success": False,
+                "message": "Invalid command sent"
+            }
+
+        msg_to_send_str = json.dumps(msg_to_send, separators=(',', ':'))
+        ws.send(msg_to_send_str)
+        if broadcast_id is not None:
+            broadcast_state(broadcast_id, ObjectId(broadcast_id))
+
+    # game_clients[match_id].remove(ws)
+
+
+def add_client_to_map(match_id: str, ws: WebSocket) -> None:
+    if match_id not in game_clients:
+        game_clients[match_id] = set()
+    game_clients[match_id].add(ws)
+
+
+def broadcast_state(match_id: str, object_id: ObjectId) -> None:
+    state = generate_state_dict(matches.find_one({"_id": object_id}))
+    state_json = json.dumps(state, separators=(',', ':'))
+    removed_clients: List[WebSocket] = []
+    for client in game_clients[match_id]:
+        try:
+            client.send(state_json)
+        except WebSocketError:
+            removed_clients.append(client)
+    for client in removed_clients:
+        game_clients[match_id].remove(client)
+
+
+def generate_state_dict(match: Dict) -> StateDict:
     return {
+        "messageType": "state",
+        "success": True,
+        "matchId": str(match["_id"]),
         "currentTurn": match["currentTurn"],
         "cards": match["cards"],
         "startingCards": match["startingCards"],
@@ -34,24 +106,7 @@ def generate_state_dict(match: Dict) -> Dict:
     }
 
 
-def stream_match(match_id: str):
-    queue: List[Union[str, Tuple[str, datetime]]] = stream_queue[match_id]
-    latest_index = len(queue) - 1  # Only send the most recent message in the queue
-    while True:
-        queue_length = len(queue)
-        # It's only ever a tuple if it's the final message in the queue
-        # We store the datetime so that this element in the dictionary can be cleared up later
-        if queue_length == latest_index:
-            continue
-        if type(queue[latest_index]) == tuple:
-            yield queue[latest_index][0]
-            break
-        yield queue[latest_index]
-        latest_index += 1
-
-
-@app.route("/game/create", methods=["POST"])
-def game_create():
+def game_create() -> CommandResponse:
     token = "".join(random.choices(string.ascii_letters + string.digits, k=32))
     color: str = "Blue"
     enemy: str = "Red"
@@ -66,20 +121,31 @@ def game_create():
     match_id = str(matches.insert_one(insert).inserted_id)
 
     return {
+        "messageType": "create",
+        "success": True,
         "matchId": match_id,
         "token": token,
         "color": color.lower()
     }
 
 
-@app.route("/game/join/<string:match_id>", methods=["POST"])
-def game_join(match_id: str):
+def game_join(match_id: str) -> CommandResponse:
     object_id = ObjectId(match_id)
     match = matches.find_one({"_id": object_id})
     if match is None:
-        return Response("Match not found", 404)
+        return {
+            "messageType": "join",
+            "success": False,
+            "matchId": match_id,
+            "message": "Match not found"
+        }
     if match["gameState"] != GameState.WAITING_FOR_PLAYER.value:
-        return Response("Not allowed to join", 401)
+        return {
+            "messageType": "join",
+            "success": False,
+            "matchId": match_id,
+            "message": "Not allowed to join"
+        }
 
     token = "".join(random.choices(string.ascii_letters + string.digits, k=32))
     color: str = "red" if match["tokenRed"] == "" else "blue"
@@ -107,77 +173,81 @@ def game_join(match_id: str):
         }}
     )
 
-    add_state_to_stream_queue(match_id, object_id)
-
     return {
+        "messageType": "join",
+        "success": True,
+        "matchId": match_id,
         "token": token,
         "color": color
     }
 
 
-@app.route("/game/stream/<string:match_id>", methods=["GET"])
-def game_stream(match_id: str):
+def game_state(match_id: str) -> Union[StateDict, CommandResponse]:
     object_id = ObjectId(match_id)
     match = matches.find_one({"_id": object_id})
     if match is None:
-        return Response("Match not found", 404)
-    if match["gameState"] == GameState.ENDED.value:
-        return game_state(match_id)
-    if match_id not in stream_queue:
-        stream_queue[match_id] = ["started\n"]
-    return Response(stream_match(match_id))
+        return {
+            "messageType": "state",
+            "success": False,
+            "matchId": match_id,
+            "message": "Match not found"
+        }
 
-
-@app.route("/game/state/<string:match_id>", methods=["GET"])
-def game_state(match_id: str):
-    object_id = ObjectId(match_id)
-    match = matches.find_one({"_id": object_id})
-    if match is None:
-        return Response("Match not found", 404)
     return generate_state_dict(match)
 
 
-def add_state_to_stream_queue(match_id: str, object_id: ObjectId, ended=False):
-    state = generate_state_dict(matches.find_one({"_id": object_id}))
-    state_message = json.dumps(state, separators=(',', ':')) + "\n"
-    if ended:
-        state_message = (state_message, datetime.utcnow())
-    if match_id not in stream_queue:
-        stream_queue[match_id] = []
-    stream_queue[match_id].append(state_message)
-
-
-@app.route("/game/move/<string:match_id>", methods=["POST"])
-def game_move(match_id: str):
+def game_move(match_id: str, token: str, move: str, card_name: str) -> CommandResponse:
     object_id = ObjectId(match_id)
     match = matches.find_one({"_id": object_id})
     if match is None:
-        return Response("Match not found", 404)
+        return {
+            "messageType": "move",
+            "success": False,
+            "matchId": match_id,
+            "message": "Match not found"
+        }
     if match["gameState"] == GameState.ENDED.value:
-        return Response("Game ended", 409)
+        return {
+            "messageType": "move",
+            "success": False,
+            "matchId": match_id,
+            "message": "Game ended"
+        }
 
-    token: str = request.form.get("token", "none", str)
     if token == match["tokenBlue"]:
         color = "blue"
     elif token == match["tokenRed"]:
         color = "red"
     else:
-        return Response("Token is incorrect", 401)
+        return {
+            "messageType": "move",
+            "success": False,
+            "matchId": match_id,
+            "message": "Token is incorrect"
+        }
 
-    move: Optional[str] = request.form.get("move", None, str)
-    card_name: Optional[str] = request.form.get("card", None, str)
     if move[0] not in "abdce" or move[1] not in "12345" or move[2] not in "abcde" or move[3] not in "12345":
         move = None
     if card_name not in ALL_CARD_NAMES:
         card_name = None
     if move is None or card_name is None:
-        return Response("'move' or 'card' not given properly", 409)
+        return {
+            "messageType": "move",
+            "success": False,
+            "matchId": match_id,
+            "message": "'move' or 'card' not given properly"
+        }
 
     board = str_to_board(match["board"])
     piece_pos = notation_to_pos(move[:2])
 
     if board[piece_pos.y][piece_pos.x].color.value != color:
-        return Response("Cannot move opponent's pieces or empty squares", 409)
+        return {
+            "messageType": "move",
+            "success": False,
+            "matchId": match_id,
+            "message": "Cannot move opponent's pieces or empty squares"
+        }
 
     move_pos = notation_to_pos(move[2:])
     move_card = get_card_from_name(card_name)
@@ -185,7 +255,12 @@ def game_move(match_id: str):
     new_board: Optional[Board] = apply_move(piece_pos, move_pos, move_card, cards, board)
 
     if new_board is None:
-        return Response("Invalid move", 409)
+        return {
+            "messageType": "move",
+            "success": False,
+            "matchId": match_id,
+            "message": "Invalid move"
+        }
 
     winner = check_win_condition(new_board)
     state = GameState.ENDED.value if winner != Player.NONE else GameState.IN_PROGRESS.value
@@ -215,20 +290,22 @@ def game_move(match_id: str):
         }}
     )
 
-    add_state_to_stream_queue(match_id, object_id, state == GameState.ENDED.value)
+    broadcast_state(match_id, object_id)
 
-    return Response("Move made", 200)
+    return {
+        "messageType": "move",
+        "success": True,
+        "matchId": match_id,
+        "message": "Move made"
+    }
 
-
-@app.route("/game")
-def game():
-    ret = "Endpoints for /game/...:<br>"
-    ret += '<br>'.join(str(x) for x in app.url_map._rules if x.rule.startswith("/game/"))
-    return ret
-
-
-# TODO: Timed clear out of finished matches from stream_queue
 
 @app.route("/")
 def index():
     return "index page"
+
+
+if __name__ == "__main__":
+    server = pywsgi.WSGIServer(('127.0.0.1', 5000), app, handler_class=WebSocketHandler)
+    print("running")
+    server.serve_forever()
