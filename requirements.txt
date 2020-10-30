@@ -4,3 +4,4 @@ Flask~=1.1.2
 dataclasses~=0.7
 gunicorn~=20.0.4
 gevent~=20.9.0
+Flask-Sockets~=0.2.1
