@@ -41,7 +41,9 @@ def game_socket(ws: WebSocket) -> None:
         print(f"Received:`{message}`")
         msg_to_send: Union[StateDict, CommandResponse]
         broadcast_id: Optional[str] = None
+        broadcast_only_to_sender = False
         match_id: str
+
         if message == "create":
             msg_to_send = game_create()
             match_id = msg_to_send["matchId"]
@@ -59,6 +61,13 @@ def game_socket(ws: WebSocket) -> None:
             # Command format: move [match_id] [token] [move] [card]
             # Example: move 5f9c394ee71e1740c218587b iq2V39W9WNm0EZpDqEcqzoLRhSkdD3lY a1b1 boar
             msg_to_send = game_move(split[1], split[2], split[3], split[4])
+        elif message.startswith("spectate "):
+            msg_to_send = game_spectate(message[9:])
+            if msg_to_send["success"]:
+                match_id = msg_to_send["matchId"]
+                add_client_to_map(match_id, ws)
+                broadcast_id = match_id
+                broadcast_only_to_sender = True
         else:
             msg_to_send = {
                 "messageType": "invalid",
@@ -66,10 +75,18 @@ def game_socket(ws: WebSocket) -> None:
                 "message": "Invalid command sent"
             }
 
-        msg_to_send_str = json.dumps(msg_to_send, separators=(',', ':'))
+        msg_to_send_str = to_json_str(msg_to_send)
         ws.send(msg_to_send_str)
         if broadcast_id is not None:
-            broadcast_state(broadcast_id, ObjectId(broadcast_id))
+            if broadcast_only_to_sender:
+                game_state_str = to_json_str(game_state(broadcast_id))
+                ws.send(game_state_str)
+            else:
+                broadcast_state(broadcast_id, ObjectId(broadcast_id))
+
+
+def to_json_str(d: Dict) -> str:
+    return json.dumps(d, separators=(',', ':'))
 
 
 def add_client_to_map(match_id: str, ws: WebSocket) -> None:
@@ -80,7 +97,7 @@ def add_client_to_map(match_id: str, ws: WebSocket) -> None:
 
 def broadcast_state(match_id: str, object_id: ObjectId) -> None:
     state = generate_state_dict(matches.find_one({"_id": object_id}))
-    state_json = json.dumps(state, separators=(',', ':'))
+    state_json = to_json_str(state)
     removed_clients: List[WebSocket] = []
     for client in game_clients[match_id]:
         try:
@@ -92,6 +109,14 @@ def broadcast_state(match_id: str, object_id: ObjectId) -> None:
 
 
 def generate_state_dict(match: Dict) -> StateDict:
+    if match["gameState"] == GameState.WAITING_FOR_PLAYER.value:
+        return {
+            "messageType": "state",
+            "success": True,
+            "matchId": str(match["_id"]),
+            "gameState": match["gameState"]
+        }
+
     return {
         "messageType": "state",
         "success": True,
@@ -120,6 +145,7 @@ def check_match_id(message_type):
                 }
 
         return wrapper
+
     return decorator_wrapper
 
 
@@ -200,6 +226,32 @@ def game_join(match_id: str) -> CommandResponse:
     }
 
 
+@check_match_id("spectate")
+def game_spectate(match_id: str) -> CommandResponse:
+    object_id = ObjectId(match_id)
+    match = matches.find_one({"_id": object_id})
+    if match is None:
+        return {
+            "messageType": "join",
+            "success": False,
+            "matchId": match_id,
+            "message": "Match not found"
+        }
+    if match["gameState"] == GameState.ENDED.value:
+        return {
+            "messageType": "join",
+            "success": False,
+            "matchId": match_id,
+            "message": "Game ended"
+        }
+
+    return {
+        "messageType": "spectate",
+        "success": True,
+        "matchId": match_id
+    }
+
+
 @check_match_id("state")
 def game_state(match_id: str) -> Union[StateDict, CommandResponse]:
     object_id = ObjectId(match_id)
@@ -211,7 +263,6 @@ def game_state(match_id: str) -> Union[StateDict, CommandResponse]:
             "matchId": match_id,
             "message": "Match not found"
         }
-
     return generate_state_dict(match)
 
 
@@ -326,5 +377,5 @@ def index():
 
 if __name__ == "__main__":
     server = pywsgi.WSGIServer(('127.0.0.1', 5000), app, handler_class=WebSocketHandler)
-    print("running")
+    print("Running")
     server.serve_forever()
