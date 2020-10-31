@@ -71,8 +71,6 @@ def game_socket(ws: WebSocket) -> None:
         if broadcast_id is not None:
             broadcast_state(broadcast_id, ObjectId(broadcast_id))
 
-    # game_clients[match_id].remove(ws)
-
 
 def add_client_to_map(match_id: str, ws: WebSocket) -> None:
     if match_id not in game_clients:
