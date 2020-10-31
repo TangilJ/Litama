@@ -35,7 +35,7 @@ def str_to_board(s: str) -> Board:
 
 
 def notation_to_pos(s: str) -> Pos:
-    return Pos(int(s[1]), ord(s[0]) - 97)
+    return Pos(int(s[1]) - 1, ord(s[0]) - 97)
 
 
 def get_card_from_name(name: str) -> Card:
