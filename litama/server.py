@@ -50,7 +50,7 @@ def game_socket(ws: WebSocket) -> None:
             add_client_to_map(match_id, ws)
         elif message.startswith("join "):
             msg_to_send = game_join(message[5:])
-            if msg_to_send["success"]:
+            if msg_to_send["messageType"] != "error":
                 match_id = msg_to_send["matchId"]
                 add_client_to_map(match_id, ws)
                 broadcast_id = match_id
@@ -63,17 +63,13 @@ def game_socket(ws: WebSocket) -> None:
             msg_to_send = game_move(split[1], split[2], split[3], split[4])
         elif message.startswith("spectate "):
             msg_to_send = game_spectate(message[9:])
-            if msg_to_send["success"]:
+            if msg_to_send["messageType"] != "error":
                 match_id = msg_to_send["matchId"]
                 add_client_to_map(match_id, ws)
                 broadcast_id = match_id
                 broadcast_only_to_sender = True
         else:
-            msg_to_send = {
-                "messageType": "invalid",
-                "success": False,
-                "message": "Invalid command sent"
-            }
+            msg_to_send = error_msg("Invalid command sent", message)
 
         msg_to_send_str = to_json_str(msg_to_send)
         ws.send(msg_to_send_str)
@@ -84,6 +80,14 @@ def game_socket(ws: WebSocket) -> None:
             else:
                 broadcast_state(broadcast_id, ObjectId(broadcast_id))
 
+
+def error_msg(error: str, attempted_command: str, match_id=""):
+    return {
+        "messageType": "error",
+        "matchId": match_id,
+        "error": error,
+        "command": attempted_command
+    }
 
 def to_json_str(d: Dict) -> str:
     return json.dumps(d, separators=(',', ':'))
@@ -112,14 +116,12 @@ def generate_state_dict(match: Dict) -> StateDict:
     if match["gameState"] == GameState.WAITING_FOR_PLAYER.value:
         return {
             "messageType": "state",
-            "success": True,
             "matchId": str(match["_id"]),
             "gameState": match["gameState"]
         }
 
     return {
         "messageType": "state",
-        "success": True,
         "matchId": str(match["_id"]),
         "currentTurn": match["currentTurn"],
         "cards": match["cards"],
@@ -137,12 +139,7 @@ def check_match_id(message_type):
             try:
                 return function(match_id, *args)
             except bson.errors.InvalidId:
-                return {
-                    "messageType": message_type,
-                    "success": False,
-                    "matchId": match_id,
-                    "message": "matchId was in an incorrect format"
-                }
+                return error_msg("matchId was in an incorrect format", message_type, match_id)
 
         return wrapper
 
@@ -165,7 +162,6 @@ def game_create() -> CommandResponse:
 
     return {
         "messageType": "create",
-        "success": True,
         "matchId": match_id,
         "token": token,
         "color": color.lower()
@@ -177,19 +173,9 @@ def game_join(match_id: str) -> CommandResponse:
     object_id = ObjectId(match_id)
     match = matches.find_one({"_id": object_id})
     if match is None:
-        return {
-            "messageType": "join",
-            "success": False,
-            "matchId": match_id,
-            "message": "Match not found"
-        }
+        return error_msg("Match not found", "join", match_id)
     if match["gameState"] != GameState.WAITING_FOR_PLAYER.value:
-        return {
-            "messageType": "join",
-            "success": False,
-            "matchId": match_id,
-            "message": "Not allowed to join"
-        }
+        return error_msg("Not allowed to join", "join", match_id)
 
     token = "".join(random.choices(string.ascii_letters + string.digits, k=32))
     color: str = "red" if match["tokenRed"] == "" else "blue"
@@ -219,7 +205,6 @@ def game_join(match_id: str) -> CommandResponse:
 
     return {
         "messageType": "join",
-        "success": True,
         "matchId": match_id,
         "token": token,
         "color": color
@@ -231,23 +216,11 @@ def game_spectate(match_id: str) -> CommandResponse:
     object_id = ObjectId(match_id)
     match = matches.find_one({"_id": object_id})
     if match is None:
-        return {
-            "messageType": "join",
-            "success": False,
-            "matchId": match_id,
-            "message": "Match not found"
-        }
+        return error_msg("Match not found", "spectate", match_id)
     if match["gameState"] == GameState.ENDED.value:
-        return {
-            "messageType": "join",
-            "success": False,
-            "matchId": match_id,
-            "message": "Game ended"
-        }
-
+        return error_msg("Game ended", "spectate", match_id)
     return {
         "messageType": "spectate",
-        "success": True,
         "matchId": match_id
     }
 
@@ -257,12 +230,7 @@ def game_state(match_id: str) -> Union[StateDict, CommandResponse]:
     object_id = ObjectId(match_id)
     match = matches.find_one({"_id": object_id})
     if match is None:
-        return {
-            "messageType": "state",
-            "success": False,
-            "matchId": match_id,
-            "message": "Match not found"
-        }
+        return error_msg("Match not found", "state", match_id)
     return generate_state_dict(match)
 
 
@@ -271,54 +239,29 @@ def game_move(match_id: str, token: str, move: str, card_name: str) -> CommandRe
     object_id = ObjectId(match_id)
     match = matches.find_one({"_id": object_id})
     if match is None:
-        return {
-            "messageType": "move",
-            "success": False,
-            "matchId": match_id,
-            "message": "Match not found"
-        }
+        return error_msg("Match not found", "move", match_id)
     if match["gameState"] == GameState.ENDED.value:
-        return {
-            "messageType": "move",
-            "success": False,
-            "matchId": match_id,
-            "message": "Game ended"
-        }
+        return error_msg("Game ended", "move", match_id)
 
     if token == match["tokenBlue"]:
         color = "blue"
     elif token == match["tokenRed"]:
         color = "red"
     else:
-        return {
-            "messageType": "move",
-            "success": False,
-            "matchId": match_id,
-            "message": "Token is incorrect"
-        }
+        return error_msg("Token is incorrect", "move", match_id)
 
     if move[0] not in "abdce" or move[1] not in "12345" or move[2] not in "abcde" or move[3] not in "12345":
         move = "none"
     if card_name not in ALL_BASE_CARD_NAMES:
         card_name = "none"
     if move == "none" or card_name == "none":
-        return {
-            "messageType": "move",
-            "success": False,
-            "matchId": match_id,
-            "message": "'move' or 'card' not given properly"
-        }
+        return error_msg("'move' or 'card' not given properly", "move", match_id)
 
     board = str_to_board(match["board"])
     piece_pos = notation_to_pos(move[:2])
 
     if board[piece_pos.y][piece_pos.x].color.value != color:
-        return {
-            "messageType": "move",
-            "success": False,
-            "matchId": match_id,
-            "message": "Cannot move opponent's pieces or empty squares"
-        }
+        return error_msg("Cannot move opponent's pieces or empty squares", "move", match_id)
 
     move_pos = notation_to_pos(move[2:])
     move_card = get_card_from_name(card_name)
@@ -326,12 +269,7 @@ def game_move(match_id: str, token: str, move: str, card_name: str) -> CommandRe
     new_board: Optional[Board] = apply_move(piece_pos, move_pos, move_card, cards, board)
 
     if new_board is None:
-        return {
-            "messageType": "move",
-            "success": False,
-            "matchId": match_id,
-            "message": "Invalid move"
-        }
+        return error_msg("Invalid move", "move", match_id)
 
     winner = check_win_condition(new_board)
     state = GameState.ENDED.value if winner != Player.NONE else GameState.IN_PROGRESS.value
@@ -365,7 +303,6 @@ def game_move(match_id: str, token: str, move: str, card_name: str) -> CommandRe
 
     return {
         "messageType": "move",
-        "success": True,
         "matchId": match_id
     }
 
