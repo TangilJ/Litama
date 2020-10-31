@@ -1,7 +1,7 @@
 import random
 from typing import List, Tuple, Optional
 
-from cards import ALL_CARDS
+from cards import ALL_BASE_CARDS
 from structures import Piece, Pos, Card, Player
 
 Board = List[List[Piece]]
@@ -18,7 +18,7 @@ def init_game() -> Tuple[Board, List[Card], List[Card], Card]:
         board[y][x].color = Player.RED
     board[4][2].is_master = True
 
-    random_cards = random.sample(ALL_CARDS, 5)
+    random_cards = random.sample(ALL_BASE_CARDS, 5)
     blue_cards = random_cards[:2]
     red_cards = random_cards[2:4]
     side_card = random_cards[4]

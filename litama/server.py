@@ -13,7 +13,7 @@ from gevent import pywsgi
 from geventwebsocket.handler import WebSocketHandler
 from geventwebsocket.websocket import WebSocket
 
-from cards import ALL_CARD_NAMES
+from cards import ALL_BASE_CARD_NAMES
 from config import MONGODB_HOST
 from game import init_game, Board, apply_move, check_win_condition
 from conversions import board_to_str, str_to_board, notation_to_pos, get_card_from_name, get_cards_from_names
@@ -299,7 +299,7 @@ def game_move(match_id: str, token: str, move: str, card_name: str) -> CommandRe
 
     if move[0] not in "abdce" or move[1] not in "12345" or move[2] not in "abcde" or move[3] not in "12345":
         move = "none"
-    if card_name not in ALL_CARD_NAMES:
+    if card_name not in ALL_BASE_CARD_NAMES:
         card_name = "none"
     if move == "none" or card_name == "none":
         return {
