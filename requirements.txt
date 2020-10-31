@@ -1,6 +1,6 @@
 dnspython~=2.0.0
 pymongo~=3.11.0
 Flask~=1.1.2
-dataclasses~=0.7
+dataclasses~=0.7; python_version < '3.7'
 gevent~=20.9.0
 Flask-Sockets~=0.2.1
