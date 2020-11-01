@@ -35,9 +35,9 @@ GIRAFFE = Card("giraffe", Player.BLUE, [Pos(-2, 1), Pos(0, -1), Pos(2, 1)])
 PANDA = Card("panda", Player.RED, [Pos(-1, -1), Pos(0, 1), Pos(1, 1)])
 BEAR = Card("bear", Player.BLUE, [Pos(-1, 1), Pos(0, 1), Pos(1, -1)])
 KIRIN = Card("kirin", Player.RED, [Pos(-1, 2), Pos(0, -2), Pos(1, 2)])
-SEA_SNAKE = Card("sea snake", Player.BLUE, [Pos(-1, -1), Pos(0, 1), Pos(2, 0)])
+SEA_SNAKE = Card("sea_snake", Player.BLUE, [Pos(-1, -1), Pos(0, 1), Pos(2, 0)])
 VIPER = Card("viper", Player.RED, [Pos(-2, 0), Pos(0, 1), Pos(1, -1)])
-PHEONIX = Card("pheonix", Player.BLUE, [Pos(-2, 0), Pos(-1, 1), Pos(1, 1), Pos(2, 0)])
+PHOENIX = Card("phoenix", Player.BLUE, [Pos(-2, 0), Pos(-1, 1), Pos(1, 1), Pos(2, 0)])
 MOUSE = Card("mouse", Player.BLUE, [Pos(-1, -1), Pos(0, 1), Pos(1, 0)])
 RAT = Card("rat", Player.RED, [Pos(-1, 0), Pos(0, 1), Pos(1, -1)])
 TURTLE = Card("turtle", Player.RED, [Pos(-2, 0), Pos(-1, -1), Pos(1, -1), Pos(2, 0)])
@@ -47,7 +47,7 @@ SABLE = Card("sable", Player.BLUE, [Pos(-2, 0), Pos(-1, -1), Pos(1, 1)])
 OTTER = Card("otter", Player.RED, [Pos(-1, 1), Pos(1, -1), Pos(2, 0)])
 
 ALL_EXPANSION_CARDS: List[Card] = [FOX, DOG, GIRAFFE, PANDA, BEAR, KIRIN, SEA_SNAKE, VIPER,
-                                   PHEONIX, MOUSE, RAT, TURTLE, TANUKI, IGUANA, SABLE, OTTER]
+                                   PHOENIX, MOUSE, RAT, TURTLE, TANUKI, IGUANA, SABLE, OTTER]
 ALL_EXPANSION_CARD_NAMES: List[str] = [card.name for card in ALL_EXPANSION_CARDS]
 
 # All cards combined

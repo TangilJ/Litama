@@ -89,6 +89,7 @@ def error_msg(error: str, attempted_command: str, match_id=""):
         "command": attempted_command
     }
 
+
 def to_json_str(d: Dict) -> str:
     return json.dumps(d, separators=(',', ':'))
 
