@@ -1,6 +1,6 @@
 from typing import List
 
-from cards import ALL_CARDS
+from cards import ALL_BASE_CARDS
 from game import Board
 from structures import Player, Piece, Pos, Card
 
@@ -39,7 +39,7 @@ def notation_to_pos(s: str) -> Pos:
 
 
 def get_card_from_name(name: str) -> Card:
-    return next(filter(lambda x: x.name == name, ALL_CARDS))
+    return next(filter(lambda x: x.name == name, ALL_BASE_CARDS))
 
 
 def get_cards_from_names(names: List[str]) -> List[Card]:
