@@ -2,6 +2,7 @@ import json
 import random
 import string
 from typing import Dict, List, Union, Tuple, Optional, Set
+from secrets import token_hex
 
 import bson
 from bson import ObjectId
@@ -148,7 +149,7 @@ def check_match_id(message_type):
 
 
 def game_create() -> CommandResponse:
-    token = "".join(random.choices(string.ascii_letters + string.digits, k=32))
+    token = token_hex(32)
     color: str = "Blue"
     enemy: str = "Red"
     if random.random() < 0.5:
