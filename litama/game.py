@@ -92,7 +92,7 @@ def apply_move(piece_pos: Pos,
     cloned: Board = clone_board(b)
     cloned[move_pos.y][move_pos.x].color = cloned[piece_pos.y][piece_pos.x].color
     cloned[move_pos.y][move_pos.x].is_master = cloned[piece_pos.y][piece_pos.x].is_master
-    cloned[piece_pos.y][move_pos.x].color = Player.NONE
+    cloned[piece_pos.y][piece_pos.x].color = Player.NONE
     return cloned
 
 
