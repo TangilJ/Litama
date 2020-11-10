@@ -279,7 +279,7 @@ def game_move(match_id: str, token: str, card_name: str, move: str) -> CommandRe
     state = GameState.ENDED.value if winner != Player.NONE else GameState.IN_PROGRESS.value
 
     moves = match["moves"]
-    moves.append(f"{move}:{card_name}")
+    moves.append(f"{card_name}:{move}")
     side_card: str = match["cards"]["side"]
     new_cards: List[str] = match["cards"][color]
     new_cards[new_cards.index(card_name)] = side_card
