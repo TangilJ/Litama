@@ -104,14 +104,16 @@ def add_client_to_map(match_id: str, ws: WebSocket) -> None:
 def broadcast_state(match_id: str, object_id: ObjectId) -> None:
     state = generate_state_dict(matches.find_one({"_id": object_id}))
     state_json = to_json_str(state)
-    removed_clients: List[WebSocket] = []
-    for client in game_clients[match_id]:
-        try:
-            client.send(state_json)
-        except WebSocketError:
-            removed_clients.append(client)
-    for client in removed_clients:
-        game_clients[match_id].remove(client)
+    
+    if match_id in game_clients:
+        removed_clients: List[WebSocket] = []
+        for client in game_clients[match_id]:
+            try:
+                client.send(state_json)
+            except WebSocketError:
+                removed_clients.append(client)
+        for client in removed_clients:
+            game_clients[match_id].remove(client)
 
 
 def generate_state_dict(match: Dict) -> StateDict:
