@@ -59,6 +59,9 @@ def game_socket(ws: WebSocket) -> None:
             # Command format: move [match_id] [token] [move] [card]
             # Example: move 5f9c394ee71e1740c218587b iq2V39W9WNm0EZpDqEcqzoLRhSkdD3lY a1b1 boar
             msg_to_send = game_move(split[1], split[2], split[3], split[4])
+            if msg_to_send["messageType"] != "error":
+                match_id = msg_to_send["matchId"]
+                broadcast_id = match_id
         elif message.startswith("spectate "):
             msg_to_send = game_spectate(message[9:])
             if msg_to_send["messageType"] != "error":
@@ -297,8 +300,6 @@ def game_move(match_id: str, token: str, move: str, card_name: str) -> CommandRe
             "winner": winner.value
         }}
     )
-
-    broadcast_state(match_id, object_id)
 
     return {
         "messageType": "move",
