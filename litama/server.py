@@ -2,6 +2,7 @@ import json
 import random
 import string
 from typing import Dict, List, Union, Tuple, Optional, Set
+from secrets import token_hex
 
 import bson
 from bson import ObjectId
@@ -46,21 +47,21 @@ def game_socket(ws: WebSocket) -> None:
 
         if message == "create":
             msg_to_send = game_create()
-            match_id = msg_to_send["matchId"]
-            add_client_to_map(match_id, ws)
         elif message.startswith("join "):
             msg_to_send = game_join(message[5:])
             if msg_to_send["messageType"] != "error":
                 match_id = msg_to_send["matchId"]
-                add_client_to_map(match_id, ws)
                 broadcast_id = match_id
         elif message.startswith("state "):
             msg_to_send = game_state(message[6:])
         elif message.startswith("move "):
             split = message.split(" ")
-            # Command format: move [match_id] [token] [move] [card]
-            # Example: move 5f9c394ee71e1740c218587b iq2V39W9WNm0EZpDqEcqzoLRhSkdD3lY a1b1 boar
+            # Command format: move [match_id] [token] [card] [move]
+            # Example: move 5f9c394ee71e1740c218587b iq2V39W9WNm0EZpDqEcqzoLRhSkdD3lY boar a1a2
             msg_to_send = game_move(split[1], split[2], split[3], split[4])
+            if msg_to_send["messageType"] != "error":
+                match_id = msg_to_send["matchId"]
+                broadcast_id = match_id
         elif message.startswith("spectate "):
             msg_to_send = game_spectate(message[9:])
             if msg_to_send["messageType"] != "error":
@@ -103,14 +104,16 @@ def add_client_to_map(match_id: str, ws: WebSocket) -> None:
 def broadcast_state(match_id: str, object_id: ObjectId) -> None:
     state = generate_state_dict(matches.find_one({"_id": object_id}))
     state_json = to_json_str(state)
-    removed_clients: List[WebSocket] = []
-    for client in game_clients[match_id]:
-        try:
-            client.send(state_json)
-        except WebSocketError:
-            removed_clients.append(client)
-    for client in removed_clients:
-        game_clients[match_id].remove(client)
+
+    if match_id in game_clients:
+        removed_clients: List[WebSocket] = []
+        for client in game_clients[match_id]:
+            try:
+                client.send(state_json)
+            except WebSocketError:
+                removed_clients.append(client)
+        for client in removed_clients:
+            game_clients[match_id].remove(client)
 
 
 def generate_state_dict(match: Dict) -> StateDict:
@@ -148,7 +151,7 @@ def check_match_id(message_type):
 
 
 def game_create() -> CommandResponse:
-    token = "".join(random.choices(string.ascii_letters + string.digits, k=32))
+    token = token_hex(32)
     color: str = "Blue"
     enemy: str = "Red"
     if random.random() < 0.5:
@@ -236,7 +239,7 @@ def game_state(match_id: str) -> Union[StateDict, CommandResponse]:
 
 
 @check_match_id("move")
-def game_move(match_id: str, token: str, move: str, card_name: str) -> CommandResponse:
+def game_move(match_id: str, token: str, card_name: str, move: str) -> CommandResponse:
     object_id = ObjectId(match_id)
     match = matches.find_one({"_id": object_id})
     if match is None:
@@ -276,7 +279,7 @@ def game_move(match_id: str, token: str, move: str, card_name: str) -> CommandRe
     state = GameState.ENDED.value if winner != Player.NONE else GameState.IN_PROGRESS.value
 
     moves = match["moves"]
-    moves.append(f"{move}:{card_name}")
+    moves.append(f"{card_name}:{move}")
     side_card: str = match["cards"]["side"]
     new_cards: List[str] = match["cards"][color]
     new_cards[new_cards.index(card_name)] = side_card
@@ -299,8 +302,6 @@ def game_move(match_id: str, token: str, move: str, card_name: str) -> CommandRe
             "winner": winner.value
         }}
     )
-
-    broadcast_state(match_id, object_id)
 
     return {
         "messageType": "move",
