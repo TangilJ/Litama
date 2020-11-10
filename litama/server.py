@@ -47,13 +47,10 @@ def game_socket(ws: WebSocket) -> None:
 
         if message == "create":
             msg_to_send = game_create()
-            match_id = msg_to_send["matchId"]
-            add_client_to_map(match_id, ws)
         elif message.startswith("join "):
             msg_to_send = game_join(message[5:])
             if msg_to_send["messageType"] != "error":
                 match_id = msg_to_send["matchId"]
-                add_client_to_map(match_id, ws)
                 broadcast_id = match_id
         elif message.startswith("state "):
             msg_to_send = game_state(message[6:])
