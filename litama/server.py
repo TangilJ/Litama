@@ -311,7 +311,8 @@ def game_move(match_id: str, token: str, card_name: str, move: str) -> CommandRe
 
 @app.route("/")
 def index():
-    return "index page"
+    return "This is a WebSocket server. Connect to this address using the ws or wss protocol. " \
+           "See the <a href=\"https://github.com/TheBlocks/Litama/wiki\">wiki</a> for more information."
 
 
 if __name__ == "__main__":
