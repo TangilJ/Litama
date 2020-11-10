@@ -56,8 +56,8 @@ def game_socket(ws: WebSocket) -> None:
             msg_to_send = game_state(message[6:])
         elif message.startswith("move "):
             split = message.split(" ")
-            # Command format: move [match_id] [token] [move] [card]
-            # Example: move 5f9c394ee71e1740c218587b iq2V39W9WNm0EZpDqEcqzoLRhSkdD3lY a1b1 boar
+            # Command format: move [match_id] [token] [card] [move]
+            # Example: move 5f9c394ee71e1740c218587b iq2V39W9WNm0EZpDqEcqzoLRhSkdD3lY boar a1a2
             msg_to_send = game_move(split[1], split[2], split[3], split[4])
             if msg_to_send["messageType"] != "error":
                 match_id = msg_to_send["matchId"]
@@ -104,7 +104,7 @@ def add_client_to_map(match_id: str, ws: WebSocket) -> None:
 def broadcast_state(match_id: str, object_id: ObjectId) -> None:
     state = generate_state_dict(matches.find_one({"_id": object_id}))
     state_json = to_json_str(state)
-    
+
     if match_id in game_clients:
         removed_clients: List[WebSocket] = []
         for client in game_clients[match_id]:
@@ -239,7 +239,7 @@ def game_state(match_id: str) -> Union[StateDict, CommandResponse]:
 
 
 @check_match_id("move")
-def game_move(match_id: str, token: str, move: str, card_name: str) -> CommandResponse:
+def game_move(match_id: str, token: str, card_name: str, move: str) -> CommandResponse:
     object_id = ObjectId(match_id)
     match = matches.find_one({"_id": object_id})
     if match is None:
