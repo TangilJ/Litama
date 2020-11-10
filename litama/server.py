@@ -13,12 +13,28 @@ from pymongo import MongoClient
 from gevent import pywsgi
 from geventwebsocket.handler import WebSocketHandler
 from geventwebsocket.websocket import WebSocket
+from gevent_tasks import TaskManager
 
 from cards import ALL_BASE_CARD_NAMES
 from config import MONGODB_HOST
 from game import init_game, Board, apply_move, check_win_condition
 from conversions import board_to_str, str_to_board, notation_to_pos, get_card_from_name, get_cards_from_names
 from structures import Player, GameState
+
+manager = TaskManager()
+
+
+@manager.task(interval=15)
+def keep_alive_task(_):
+    removed_clients: List[WebSocket] = []
+    for client in connected_clients:
+        try:
+            client.send_frame("0", WebSocket.OPCODE_PING)
+        except WebSocketError:
+            removed_clients.append(client)
+    for client in removed_clients:
+        connected_clients.remove(client)
+
 
 app = Flask(__name__)
 sockets = Sockets(app)
@@ -27,6 +43,9 @@ mongodb = MongoClient(MONGODB_HOST)
 matches = mongodb.litama.matches
 
 game_clients: Dict[str, Set[WebSocket]] = {}
+connected_clients: Set[WebSocket] = set()
+
+manager.start_all()
 
 StateDict = Dict[str, Union[bool, str, List[str], Dict[str, Union[List[str], str]]]]
 CommandResponse = Dict[str, Union[bool, str]]
@@ -34,6 +53,8 @@ CommandResponse = Dict[str, Union[bool, str]]
 
 @sockets.route("/")
 def game_socket(ws: WebSocket) -> None:
+    add_client_to_connected_map(ws)
+
     while not ws.closed:
         message = ws.receive()
         if message is None:
@@ -99,6 +120,11 @@ def add_client_to_map(match_id: str, ws: WebSocket) -> None:
     if match_id not in game_clients:
         game_clients[match_id] = set()
     game_clients[match_id].add(ws)
+
+
+def add_client_to_connected_map(ws: WebSocket) -> None:
+    if ws not in connected_clients:
+        connected_clients.add(ws)
 
 
 def broadcast_state(match_id: str, object_id: ObjectId) -> None:
