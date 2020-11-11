@@ -1,7 +1,6 @@
 import json
 import random
-import string
-from typing import Dict, List, Union, Tuple, Optional, Set
+from typing import Dict, List, Union, Optional, Set
 from secrets import token_hex
 
 import bson
@@ -181,7 +180,7 @@ def game_join(match_id: str) -> CommandResponse:
     if match["gameState"] != GameState.WAITING_FOR_PLAYER.value:
         return error_msg("Not allowed to join", "join", match_id)
 
-    token = "".join(random.choices(string.ascii_letters + string.digits, k=32))
+    token = token_hex(32)
     color: str = "red" if match["tokenRed"] == "" else "blue"
     board, blue_cards, red_cards, side_card = init_game()
 
