@@ -9,9 +9,9 @@ def board_to_str(b: Board) -> str:
     s = ""
     for row in b:
         for piece in row:
-            if piece.color == Player.BLUE:
+            if piece.colour == Player.BLUE:
                 s += "2" if piece.is_master else "1"
-            elif piece.color == Player.RED:
+            elif piece.colour == Player.RED:
                 s += "4" if piece.is_master else "3"
             else:
                 s += "0"
@@ -26,9 +26,9 @@ def str_to_board(s: str) -> Board:
         x = i % 5
         y = i // 5
         if n == "1" or n == "2":
-            board[y][x].color = Player.BLUE
+            board[y][x].colour = Player.BLUE
         if n == "3" or n == "4":
-            board[y][x].color = Player.RED
+            board[y][x].colour = Player.RED
         if n == "2" or n == "4":
             board[y][x].is_master = True
     return board

@@ -152,13 +152,13 @@ def check_match_id(message_type):
 
 def game_create() -> CommandResponse:
     token = token_hex(32)
-    color: str = "Blue"
+    colour: str = "Blue"
     enemy: str = "Red"
     if random.random() < 0.5:
-        color = "Red"
+        colour = "Red"
         enemy = "Blue"
     insert = {
-        f"token{color}": token,
+        f"token{colour}": token,
         f"token{enemy}": "",
         "gameState": GameState.WAITING_FOR_PLAYER.value
     }
@@ -168,7 +168,7 @@ def game_create() -> CommandResponse:
         "messageType": "create",
         "matchId": match_id,
         "token": token,
-        "color": color.lower()
+        "colour": colour.lower()
     }
 
 
@@ -182,17 +182,17 @@ def game_join(match_id: str) -> CommandResponse:
         return error_msg("Not allowed to join", "join", match_id)
 
     token = "".join(random.choices(string.ascii_letters + string.digits, k=32))
-    color: str = "red" if match["tokenRed"] == "" else "blue"
+    colour: str = "red" if match["tokenRed"] == "" else "blue"
     board, blue_cards, red_cards, side_card = init_game()
 
     matches.find_one_and_update(
         {"_id": object_id},
         {"$set": {
-            f"token{color.title()}": token,
+            f"token{colour.title()}": token,
             "gameState": GameState.IN_PROGRESS.value,
             "board": board_to_str(board),
             "moves": [],
-            "currentTurn": side_card.color.value,
+            "currentTurn": side_card.colour.value,
             "cards": {
                 "blue": [i.name for i in blue_cards],
                 "red": [i.name for i in red_cards],
@@ -211,7 +211,7 @@ def game_join(match_id: str) -> CommandResponse:
         "messageType": "join",
         "matchId": match_id,
         "token": token,
-        "color": color
+        "colour": colour
     }
 
 
@@ -248,9 +248,9 @@ def game_move(match_id: str, token: str, card_name: str, move: str) -> CommandRe
         return error_msg("Game ended", "move", match_id)
 
     if token == match["tokenBlue"]:
-        color = "blue"
+        colour = "blue"
     elif token == match["tokenRed"]:
-        color = "red"
+        colour = "red"
     else:
         return error_msg("Token is incorrect", "move", match_id)
 
@@ -264,12 +264,12 @@ def game_move(match_id: str, token: str, card_name: str, move: str) -> CommandRe
     board = str_to_board(match["board"])
     piece_pos = notation_to_pos(move[:2])
 
-    if board[piece_pos.y][piece_pos.x].color.value != color:
+    if board[piece_pos.y][piece_pos.x].colour.value != colour:
         return error_msg("Cannot move opponent's pieces or empty squares", "move", match_id)
 
     move_pos = notation_to_pos(move[2:])
     move_card = get_card_from_name(card_name)
-    cards = get_cards_from_names(match["cards"][color])
+    cards = get_cards_from_names(match["cards"][colour])
     new_board: Optional[Board] = apply_move(piece_pos, move_pos, move_card, cards, board)
 
     if new_board is None:
@@ -281,10 +281,10 @@ def game_move(match_id: str, token: str, card_name: str, move: str) -> CommandRe
     moves = match["moves"]
     moves.append(f"{card_name}:{move}")
     side_card: str = match["cards"]["side"]
-    new_cards: List[str] = match["cards"][color]
+    new_cards: List[str] = match["cards"][colour]
     new_cards[new_cards.index(card_name)] = side_card
 
-    enemy = "red" if color == "blue" else "blue"
+    enemy = "red" if colour == "blue" else "blue"
     enemy_cards = match["cards"][enemy]
 
     matches.find_one_and_update(
@@ -292,10 +292,10 @@ def game_move(match_id: str, token: str, card_name: str, move: str) -> CommandRe
         {"$set": {
             "board": board_to_str(new_board),
             "moves": moves,
-            "currentTurn": "blue" if color == "red" else "red",
+            "currentTurn": "blue" if colour == "red" else "red",
             "cards": {
                 enemy: enemy_cards,
-                color: new_cards,
+                colour: new_cards,
                 "side": card_name
             },
             "gameState": state,

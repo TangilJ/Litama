@@ -19,7 +19,7 @@ class GameState(Enum):
 @dataclass
 class Piece:
     is_master: bool
-    color: Player
+    colour: Player
 
 
 @dataclass(eq=True, frozen=True)
@@ -31,7 +31,7 @@ class Pos:
 @dataclass(eq=True, frozen=True)
 class Card:
     name: str
-    color: Player
+    colour: Player
     moves: List[Pos]
     # moves = Positions the piece can move to using the card.
     # The piece is at (0, 0) and positions are relative to it.

@@ -11,11 +11,11 @@ def init_game() -> Tuple[Board, List[Card], List[Card], Card]:
     board: Board = [[Piece(False, Player.NONE) for _ in range(5)] for _ in range(5)]
 
     for x, y in [(0, 0), (1, 0), (2, 0), (3, 0), (4, 0)]:
-        board[y][x].color = Player.BLUE
+        board[y][x].colour = Player.BLUE
     board[0][2].is_master = True
 
     for x, y in [(0, 4), (1, 4), (2, 4), (3, 4), (4, 4)]:
-        board[y][x].color = Player.RED
+        board[y][x].colour = Player.RED
     board[4][2].is_master = True
 
     random_cards = random.sample(ALL_BASE_CARDS, 5)
@@ -30,10 +30,10 @@ def print_board(b: Board) -> None:
     ret: str = ""
     for y in range(5):
         for x in range(5):
-            if b[y][x].color == Player.NONE:
+            if b[y][x].colour == Player.NONE:
                 ret += "•"
             else:
-                if b[y][x].color == 0:
+                if b[y][x].colour == 0:
                     ret += "B" if b[y][x].is_master else "b"
                 else:
                     ret += "R" if b[y][x].is_master else "r"
@@ -55,7 +55,7 @@ def clone_board(board: Board) -> Board:
     for y in board:
         new_board.append([])
         for x in y:
-            new_board[-1].append(Piece(x.is_master, x.color))
+            new_board[-1].append(Piece(x.is_master, x.colour))
 
     return new_board
 
@@ -71,11 +71,11 @@ def generate_moves_for_piece(piece_pos: Pos, cards: List[Card], b: Board) -> Lis
             # Account for card rotation on both sides
             # On blue side, negative X goes right
             # On red side, negative Y goes up
-            x = (-move.x if piece.color == Player.BLUE else move.x) + piece_pos.x
-            y = (-move.y if piece.color == Player.RED else move.y) + piece_pos.y
+            x = (-move.x if piece.colour == Player.BLUE else move.x) + piece_pos.x
+            y = (-move.y if piece.colour == Player.RED else move.y) + piece_pos.y
             if 0 > x or x > 4 or 0 > y or y > 4:
                 continue
-            if b[y][x].color != Player.NONE and b[y][x].color == piece.color:
+            if b[y][x].colour != Player.NONE and b[y][x].colour == piece.colour:
                 continue
 
             moves.append((Pos(x, y), card))
@@ -90,9 +90,9 @@ def apply_move(piece_pos: Pos,
     if (move_pos, move_card) not in generated_moves:
         return None
     cloned: Board = clone_board(b)
-    cloned[move_pos.y][move_pos.x].color = cloned[piece_pos.y][piece_pos.x].color
+    cloned[move_pos.y][move_pos.x].colour = cloned[piece_pos.y][piece_pos.x].colour
     cloned[move_pos.y][move_pos.x].is_master = cloned[piece_pos.y][piece_pos.x].is_master
-    cloned[piece_pos.y][piece_pos.x].color = Player.NONE
+    cloned[piece_pos.y][piece_pos.x].colour = Player.NONE
     return cloned
 
 
@@ -101,18 +101,18 @@ def check_win_condition(b: Board) -> Player:
     red_master_exists = False
     for row in b:
         for piece in row:
-            if piece.is_master and piece.color == Player.BLUE:
+            if piece.is_master and piece.colour == Player.BLUE:
                 blue_master_exists = True
-            if piece.is_master and piece.color == Player.RED:
+            if piece.is_master and piece.colour == Player.RED:
                 red_master_exists = True
     if not blue_master_exists:
         return Player.RED
     if not red_master_exists:
         return Player.BLUE
 
-    if b[0][2].is_master and b[0][2].color == Player.RED:
+    if b[0][2].is_master and b[0][2].colour == Player.RED:
         return Player.RED
-    if b[4][2].is_master and b[4][2].color == Player.BLUE:
+    if b[4][2].is_master and b[4][2].colour == Player.BLUE:
         return Player.BLUE
 
     return Player.NONE
