@@ -8,7 +8,7 @@ from structures import Player, Piece, Pos, Card
 def board_to_str(b: Board) -> str:
     s = ""
     for row in b:
-        for piece in row:
+        for piece in row[::-1]:
             if piece.color == Player.BLUE:
                 s += "2" if piece.is_master else "1"
             elif piece.color == Player.RED:
@@ -23,7 +23,7 @@ def str_to_board(s: str) -> Board:
     for i, n in enumerate(s):
         if n == "0":
             continue
-        x = i % 5
+        x = 4 - (i % 5)
         y = i // 5
         if n == "1" or n == "2":
             board[y][x].color = Player.BLUE
