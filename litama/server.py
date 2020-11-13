@@ -45,11 +45,10 @@ def game_socket(ws: WebSocket) -> None:
         match_id: str
 
         if message.startswith("create "):
-            split = message.split(" ")
-            msg_to_send = game_create(split[1])
+            msg_to_send = game_create(message[7:])
         elif message.startswith("join "):
             split = message.split(" ")
-            msg_to_send = game_join(split[1], split[2])
+            msg_to_send = game_join(split[1], "".join(split[2:]))
             if msg_to_send["messageType"] != "error":
                 match_id = msg_to_send["matchId"]
                 broadcast_id = match_id
