@@ -188,8 +188,11 @@ def game_create(username: str) -> CommandResponse:
         enemy = "Blue"
     insert = {
         "usernames": {
-            color.lower(): username,
-            enemy.lower(): None
+            # Set both players to the same username while the second player connects.
+            # This is to prevent the first player from bruteforcing matches to get the color
+            # they want while still allowing spectators to see who the first player is.
+            "blue": username,
+            "red": username
         },
         f"token{color}": token,
         f"token{enemy}": "",
@@ -200,8 +203,7 @@ def game_create(username: str) -> CommandResponse:
     return {
         "messageType": "create",
         "matchId": match_id,
-        "token": token,
-        "color": color.lower()
+        "token": token
     }
 
 
@@ -246,8 +248,7 @@ def game_join(match_id: str, username: str) -> CommandResponse:
     return {
         "messageType": "join",
         "matchId": match_id,
-        "token": token,
-        "color": color
+        "token": token
     }
 
 
