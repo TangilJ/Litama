@@ -65,10 +65,12 @@ def game_socket(ws: WebSocket) -> None:
         broadcast_only_to_sender = False
         match_id: str
 
-        if message == "create":
-            msg_to_send = game_create()
+        if message.startswith("create "):
+            split = message.split(" ")
+            msg_to_send = game_create(split[1])
         elif message.startswith("join "):
-            msg_to_send = game_join(message[5:])
+            split = message.split(" ")
+            msg_to_send = game_join(split[1], split[2])
             if msg_to_send["messageType"] != "error":
                 match_id = msg_to_send["matchId"]
                 broadcast_id = match_id
@@ -146,11 +148,13 @@ def generate_state_dict(match: Dict) -> StateDict:
         return {
             "messageType": "state",
             "matchId": str(match["_id"]),
-            "gameState": match["gameState"]
+            "gameState": match["gameState"],
+            "usernames": match["usernames"]
         }
 
     return {
         "messageType": "state",
+        "usernames": match["usernames"],
         "matchId": str(match["_id"]),
         "currentTurn": match["currentTurn"],
         "cards": match["cards"],
@@ -175,7 +179,7 @@ def check_match_id(message_type):
     return decorator_wrapper
 
 
-def game_create() -> CommandResponse:
+def game_create(username: str) -> CommandResponse:
     token = token_hex(32)
     color: str = "Blue"
     enemy: str = "Red"
@@ -183,6 +187,10 @@ def game_create() -> CommandResponse:
         color = "Red"
         enemy = "Blue"
     insert = {
+        "usernames": {
+            color.lower(): username,
+            enemy.lower(): "unknown"
+        },
         f"token{color}": token,
         f"token{enemy}": "",
         "gameState": GameState.WAITING_FOR_PLAYER.value
@@ -198,7 +206,7 @@ def game_create() -> CommandResponse:
 
 
 @check_match_id("join")
-def game_join(match_id: str) -> CommandResponse:
+def game_join(match_id: str, username: str) -> CommandResponse:
     object_id = ObjectId(match_id)
     match = matches.find_one({"_id": object_id})
     if match is None:
@@ -209,11 +217,14 @@ def game_join(match_id: str) -> CommandResponse:
     token = token_hex(32)
     color: str = "red" if match["tokenRed"] == "" else "blue"
     board, blue_cards, red_cards, side_card = init_game()
+    usernames = match["usernames"]
+    usernames[color] = username
 
     matches.find_one_and_update(
         {"_id": object_id},
         {"$set": {
             f"token{color.title()}": token,
+            "usernames": usernames,
             "gameState": GameState.IN_PROGRESS.value,
             "board": board_to_str(board),
             "moves": [],
