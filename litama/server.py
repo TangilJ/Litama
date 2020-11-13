@@ -163,7 +163,7 @@ def game_create(username: str) -> CommandResponse:
     insert = {
         "usernames": {
             color.lower(): username,
-            enemy.lower(): "unknown"
+            enemy.lower(): None
         },
         f"token{color}": token,
         f"token{enemy}": "",
