@@ -129,6 +129,7 @@ def generate_state_dict(match: Dict) -> StateDict:
     return {
         "messageType": "state",
         "usernames": match["usernames"],
+        "indices": match["indices"],
         "matchId": str(match["_id"]),
         "currentTurn": match["currentTurn"],
         "cards": match["cards"],
@@ -161,12 +162,18 @@ def game_create(username: str) -> CommandResponse:
         color = "Red"
         enemy = "Blue"
     insert = {
+        # Set both players to the same username while the second player connects.
+        # This is to prevent the first player from bruteforcing matches to get the color
+        # they want while still allowing spectators to see who the first player is.
         "usernames": {
-            # Set both players to the same username while the second player connects.
-            # This is to prevent the first player from bruteforcing matches to get the color
-            # they want while still allowing spectators to see who the first player is.
             "blue": username,
             "red": username
+        },
+        # To keep track of which side they will be on without name-checking, we need to
+        # send their index as well.
+        "indices": {
+            "blue": 0,
+            "red": 0
         },
         f"token{color}": token,
         f"token{enemy}": "",
@@ -177,7 +184,8 @@ def game_create(username: str) -> CommandResponse:
     return {
         "messageType": "create",
         "matchId": match_id,
-        "token": token
+        "token": token,
+        "index": 0
     }
 
 
@@ -195,12 +203,15 @@ def game_join(match_id: str, username: str) -> CommandResponse:
     board, blue_cards, red_cards, side_card = init_game()
     usernames = match["usernames"]
     usernames[color] = username
+    indices = match["indices"]
+    indices[color] = 1
 
     matches.find_one_and_update(
         {"_id": object_id},
         {"$set": {
             f"token{color.title()}": token,
             "usernames": usernames,
+            "indices": indices,
             "gameState": GameState.IN_PROGRESS.value,
             "board": board_to_str(board),
             "moves": [],
@@ -222,7 +233,8 @@ def game_join(match_id: str, username: str) -> CommandResponse:
     return {
         "messageType": "join",
         "matchId": match_id,
-        "token": token
+        "token": token,
+        "index": 1
     }
 
 
