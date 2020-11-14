@@ -1,10 +1,6 @@
 import json
-import random
-from typing import Dict, List, Union, Optional, Set
-from secrets import token_hex
+from typing import Dict, List, Union, Set, Type
 
-import bson
-from bson import ObjectId
 from flask import Flask
 from flask_sockets import Sockets
 from geventwebsocket import WebSocketError
@@ -13,11 +9,14 @@ from gevent import pywsgi
 from geventwebsocket.handler import WebSocketHandler
 from geventwebsocket.websocket import WebSocket
 
-from cards import ALL_BASE_CARD_NAMES
+from commands.command import Command
+from commands.create import Create
+from commands.join import Join
+from commands.message import Message
+from commands.move import Move
+from commands.spectate import Spectate
+from commands.state import State
 from config import MONGODB_HOST
-from game import init_game, Board, apply_move, check_win_condition
-from conversions import board_to_str, str_to_board, notation_to_pos, get_card_from_name, get_cards_from_names
-from structures import Player, GameState
 
 app = Flask(__name__)
 sockets = Sockets(app)
@@ -30,65 +29,43 @@ game_clients: Dict[str, Set[WebSocket]] = {}
 StateDict = Dict[str, Union[bool, str, List[str], Dict[str, Union[List[str], str]]]]
 CommandResponse = Dict[str, Union[bool, str]]
 
+commands: List[Type[Command]] = [Create, Join, State, Move, Spectate]
+
 
 @sockets.route("/")
 def game_socket(ws: WebSocket) -> None:
     while not ws.closed:
-        message = ws.receive()
-        if message is None:
+        query = ws.receive()
+        if query is None:
             continue
 
-        print(f"Received:`{message}`")
-        msg_to_send: Union[StateDict, CommandResponse]
-        broadcast_id: Optional[str] = None
-        broadcast_only_to_sender = False
-        match_id: str
+        print(f"Received:`{query}`")
 
-        if message.startswith("create "):
-            msg_to_send = game_create(message[7:])
-        elif message.startswith("join "):
-            split = message.split(" ")
-            msg_to_send = game_join(split[1], " ".join(split[2:]))
-            if msg_to_send["messageType"] != "error":
-                match_id = msg_to_send["matchId"]
-                broadcast_id = match_id
-        elif message.startswith("state "):
-            msg_to_send = game_state(message[6:])
-        elif message.startswith("move "):
-            split = message.split(" ")
-            # Command format: move [match_id] [token] [card] [move]
-            # Example: move 5f9c394ee71e1740c218587b iq2V39W9WNm0EZpDqEcqzoLRhSkdD3lY boar a1a2
-            msg_to_send = game_move(split[1], split[2], split[3], split[4])
-            if msg_to_send["messageType"] != "error":
-                match_id = msg_to_send["matchId"]
-                broadcast_id = match_id
-        elif message.startswith("spectate "):
-            msg_to_send = game_spectate(message[9:])
-            if msg_to_send["messageType"] != "error":
-                match_id = msg_to_send["matchId"]
-                add_client_to_map(match_id, ws)
-                broadcast_id = match_id
-                broadcast_only_to_sender = True
+        messages: List[Message]
+        for command in commands:
+            if command.command_matches(query):
+                messages = command.apply_command(matches, query[len(command.STARTS_WITH):])
+                break
         else:
-            msg_to_send = error_msg("Invalid command sent", message)
+            messages = [Command.error_msg("Invalid query sent", query)]
+            pass
 
-        msg_to_send_str = to_json_str(msg_to_send)
-        ws.send(msg_to_send_str)
-        if broadcast_id is not None:
-            if broadcast_only_to_sender:
-                game_state_str = to_json_str(game_state(broadcast_id))
-                ws.send(game_state_str)
+        for message in messages:
+            if message.add_sender_to_spectate_map:
+                add_client_to_map(message.match_id, ws)
+
+            msg_to_send_str = to_json_str(message.message)
+            if message.reply_to_only_sender:
+                ws.send(msg_to_send_str)
             else:
-                broadcast_state(broadcast_id, ObjectId(broadcast_id))
-
-
-def error_msg(error: str, attempted_command: str, match_id=""):
-    return {
-        "messageType": "error",
-        "matchId": match_id,
-        "error": error,
-        "command": attempted_command
-    }
+                removed_clients: List[WebSocket] = []
+                for client in game_clients[message.match_id]:
+                    try:
+                        client.send(msg_to_send_str)
+                    except WebSocketError:
+                        removed_clients.append(client)
+                for client in removed_clients:
+                    game_clients[message.match_id].remove(client)
 
 
 def to_json_str(d: Dict) -> str:
@@ -99,236 +76,6 @@ def add_client_to_map(match_id: str, ws: WebSocket) -> None:
     if match_id not in game_clients:
         game_clients[match_id] = set()
     game_clients[match_id].add(ws)
-
-
-def broadcast_state(match_id: str, object_id: ObjectId) -> None:
-    state = generate_state_dict(matches.find_one({"_id": object_id}))
-    state_json = to_json_str(state)
-
-    if match_id in game_clients:
-        removed_clients: List[WebSocket] = []
-        for client in game_clients[match_id]:
-            try:
-                client.send(state_json)
-            except WebSocketError:
-                removed_clients.append(client)
-        for client in removed_clients:
-            game_clients[match_id].remove(client)
-
-
-def generate_state_dict(match: Dict) -> StateDict:
-    if match["gameState"] == GameState.WAITING_FOR_PLAYER.value:
-        return {
-            "messageType": "state",
-            "matchId": str(match["_id"]),
-            "gameState": match["gameState"],
-            "usernames": match["usernames"]
-        }
-
-    return {
-        "messageType": "state",
-        "usernames": match["usernames"],
-        "indices": match["indices"],
-        "matchId": str(match["_id"]),
-        "currentTurn": match["currentTurn"],
-        "cards": match["cards"],
-        "startingCards": match["startingCards"],
-        "moves": match["moves"],
-        "board": match["board"],
-        "gameState": match["gameState"],
-        "winner": match["winner"]
-    }
-
-
-def check_match_id(message_type):
-    def decorator_wrapper(function):
-        def wrapper(match_id, *args):
-            try:
-                return function(match_id, *args)
-            except bson.errors.InvalidId:
-                return error_msg("matchId was in an incorrect format", message_type, match_id)
-
-        return wrapper
-
-    return decorator_wrapper
-
-
-def game_create(username: str) -> CommandResponse:
-    token = token_hex(32)
-    color: str = "Blue"
-    enemy: str = "Red"
-    if random.random() < 0.5:
-        color = "Red"
-        enemy = "Blue"
-    insert = {
-        # Set both players to the same username while the second player connects.
-        # This is to prevent the first player from bruteforcing matches to get the color
-        # they want while still allowing spectators to see who the first player is.
-        "usernames": {
-            "blue": username,
-            "red": username
-        },
-        # To keep track of which side they will be on without name-checking, we need to
-        # send their index as well.
-        "indices": {
-            "blue": 0,
-            "red": 0
-        },
-        f"token{color}": token,
-        f"token{enemy}": "",
-        "gameState": GameState.WAITING_FOR_PLAYER.value
-    }
-    match_id = str(matches.insert_one(insert).inserted_id)
-
-    return {
-        "messageType": "create",
-        "matchId": match_id,
-        "token": token,
-        "index": 0
-    }
-
-
-@check_match_id("join")
-def game_join(match_id: str, username: str) -> CommandResponse:
-    object_id = ObjectId(match_id)
-    match = matches.find_one({"_id": object_id})
-    if match is None:
-        return error_msg("Match not found", "join", match_id)
-    if match["gameState"] != GameState.WAITING_FOR_PLAYER.value:
-        return error_msg("Not allowed to join", "join", match_id)
-
-    token = token_hex(32)
-    color: str = "red" if match["tokenRed"] == "" else "blue"
-    board, blue_cards, red_cards, side_card = init_game()
-    usernames = match["usernames"]
-    usernames[color] = username
-    indices = match["indices"]
-    indices[color] = 1
-
-    matches.find_one_and_update(
-        {"_id": object_id},
-        {"$set": {
-            f"token{color.title()}": token,
-            "usernames": usernames,
-            "indices": indices,
-            "gameState": GameState.IN_PROGRESS.value,
-            "board": board_to_str(board),
-            "moves": [],
-            "currentTurn": side_card.color.value,
-            "cards": {
-                "blue": [i.name for i in blue_cards],
-                "red": [i.name for i in red_cards],
-                "side": side_card.name
-            },
-            "startingCards": {
-                "blue": [i.name for i in blue_cards],
-                "red": [i.name for i in red_cards],
-                "side": side_card.name
-            },
-            "winner": Player.NONE.value
-        }}
-    )
-
-    return {
-        "messageType": "join",
-        "matchId": match_id,
-        "token": token,
-        "index": 1
-    }
-
-
-@check_match_id("spectate")
-def game_spectate(match_id: str) -> CommandResponse:
-    object_id = ObjectId(match_id)
-    match = matches.find_one({"_id": object_id})
-    if match is None:
-        return error_msg("Match not found", "spectate", match_id)
-    if match["gameState"] == GameState.ENDED.value:
-        return error_msg("Game ended", "spectate", match_id)
-    return {
-        "messageType": "spectate",
-        "matchId": match_id
-    }
-
-
-@check_match_id("state")
-def game_state(match_id: str) -> Union[StateDict, CommandResponse]:
-    object_id = ObjectId(match_id)
-    match = matches.find_one({"_id": object_id})
-    if match is None:
-        return error_msg("Match not found", "state", match_id)
-    return generate_state_dict(match)
-
-
-@check_match_id("move")
-def game_move(match_id: str, token: str, card_name: str, move: str) -> CommandResponse:
-    object_id = ObjectId(match_id)
-    match = matches.find_one({"_id": object_id})
-    if match is None:
-        return error_msg("Match not found", "move", match_id)
-    if match["gameState"] == GameState.ENDED.value:
-        return error_msg("Game ended", "move", match_id)
-
-    if token == match["tokenBlue"]:
-        color = "blue"
-    elif token == match["tokenRed"]:
-        color = "red"
-    else:
-        return error_msg("Token is incorrect", "move", match_id)
-
-    if move[0] not in "abdce" or move[1] not in "12345" or move[2] not in "abcde" or move[3] not in "12345":
-        move = "none"
-    if card_name not in ALL_BASE_CARD_NAMES:
-        card_name = "none"
-    if move == "none" or card_name == "none":
-        return error_msg("'move' or 'card' not given properly", "move", match_id)
-
-    board = str_to_board(match["board"])
-    piece_pos = notation_to_pos(move[:2])
-
-    if board[piece_pos.y][piece_pos.x].color.value != color:
-        return error_msg("Cannot move opponent's pieces or empty squares", "move", match_id)
-
-    move_pos = notation_to_pos(move[2:])
-    move_card = get_card_from_name(card_name)
-    cards = get_cards_from_names(match["cards"][color])
-    new_board: Optional[Board] = apply_move(piece_pos, move_pos, move_card, cards, board)
-
-    if new_board is None:
-        return error_msg("Invalid move", "move", match_id)
-
-    winner = check_win_condition(new_board)
-    state = GameState.ENDED.value if winner != Player.NONE else GameState.IN_PROGRESS.value
-
-    moves = match["moves"]
-    moves.append(f"{card_name}:{move}")
-    side_card: str = match["cards"]["side"]
-    new_cards: List[str] = match["cards"][color]
-    new_cards[new_cards.index(card_name)] = side_card
-
-    enemy = "red" if color == "blue" else "blue"
-    enemy_cards = match["cards"][enemy]
-
-    matches.find_one_and_update(
-        {"_id": object_id},
-        {"$set": {
-            "board": board_to_str(new_board),
-            "moves": moves,
-            "currentTurn": "blue" if color == "red" else "red",
-            "cards": {
-                enemy: enemy_cards,
-                color: new_cards,
-                "side": card_name
-            },
-            "gameState": state,
-            "winner": winner.value
-        }}
-    )
-
-    return {
-        "messageType": "move",
-        "matchId": match_id
-    }
 
 
 @app.route("/")
