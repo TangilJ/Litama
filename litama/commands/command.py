@@ -25,7 +25,7 @@ class Command:
                 "messageType": "error",
                 "matchId": match_id,
                 "error": error,
-                "query": attempted_query
+                "command": attempted_query
             },
             True,
             match_id

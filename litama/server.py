@@ -47,7 +47,7 @@ def game_socket(ws: WebSocket) -> None:
                 messages = command.apply_command(matches, query[len(command.STARTS_WITH):])
                 break
         else:
-            messages = [Command.error_msg("Invalid query sent", query)]
+            messages = [Command.error_msg("Invalid command sent", query)]
             pass
 
         for message in messages:
