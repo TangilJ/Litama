@@ -47,6 +47,9 @@ class Move(Command):
         board = str_to_board(match["board"])
         piece_pos = notation_to_pos(move[:2])
 
+        if match["currentTurn"] != color:
+            return [Command.error_msg("Cannot move when it is not your turn", "move", match_id)]
+
         if board[piece_pos.y][piece_pos.x].color.value != color:
             return [Command.error_msg("Cannot move opponent's pieces or empty squares", "move", match_id)]
 
