@@ -1,5 +1,5 @@
 import json
-from typing import Dict, List, Union, Set, Type
+from typing import Dict, List, Union, Set, Type, Any
 
 from flask import Flask
 from flask_sockets import Sockets
@@ -8,6 +8,7 @@ from pymongo import MongoClient
 from gevent import pywsgi
 from geventwebsocket.handler import WebSocketHandler
 from geventwebsocket.websocket import WebSocket
+from pymongo.collection import Collection
 
 from commands.command import Command
 from commands.create import Create
@@ -22,7 +23,7 @@ app = Flask(__name__)
 sockets = Sockets(app)
 
 mongodb = MongoClient(MONGODB_HOST)
-matches = mongodb.litama.matches
+matches: Collection = mongodb.litama.matches
 
 game_clients: Dict[str, Set[WebSocket]] = {}
 
@@ -32,7 +33,7 @@ CommandResponse = Dict[str, Union[bool, str]]
 commands: List[Type[Command]] = [Create, Join, State, Move, Spectate]
 
 
-@sockets.route("/")
+@sockets.route("/")  # type: ignore
 def game_socket(ws: WebSocket) -> None:
     while not ws.closed:
         query = ws.receive()
@@ -68,7 +69,7 @@ def game_socket(ws: WebSocket) -> None:
                     game_clients[message.match_id].remove(client)
 
 
-def to_json_str(d: Dict) -> str:
+def to_json_str(d: Dict[str, Any]) -> str:
     return json.dumps(d, separators=(',', ':'))
 
 
@@ -79,7 +80,7 @@ def add_client_to_map(match_id: str, ws: WebSocket) -> None:
 
 
 @app.route("/")
-def index():
+def index() -> str:
     return "This is a WebSocket server. Connect to this address using the ws or wss protocol. " \
            "See the <a href=\"https://github.com/TheBlocks/Litama/wiki\">wiki</a> for more information."
 

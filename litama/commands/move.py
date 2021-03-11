@@ -1,5 +1,7 @@
 from typing import List, Optional, Union
 
+from pymongo.collection import Collection
+
 from cards import ALL_BASE_CARD_NAMES
 from commands.command import Command
 from commands.message import Message
@@ -13,7 +15,7 @@ class Move(Command):
     STARTS_WITH = "move "
 
     @staticmethod
-    def apply_command(matches, query: str) -> List[Message]:
+    def apply_command(matches: Collection, query: str) -> List[Message]:
         # Command format: move [match_id] [token] [card] [move]
         # Example: move 5f9c394ee71e1740c218587b iq2V39W9WNm0EZpDqEcqzoLRhSkdD3lY boar a1a2
         split = query.split(" ")
@@ -99,7 +101,7 @@ class Move(Command):
                 match_id
             ),
             Message(
-                Command.generate_state_dict(matches.find_one({"_id": object_id})),
+                Command.generate_state_dict(matches.find_one({"_id": object_id})),  # type: ignore
                 False,
                 match_id
             )

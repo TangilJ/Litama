@@ -1,5 +1,7 @@
 from typing import List, Union
 
+from pymongo.collection import Collection
+
 from commands.command import Command
 from commands.message import Message
 from bson import ObjectId
@@ -9,7 +11,7 @@ class State(Command):
     STARTS_WITH = "state "
 
     @staticmethod
-    def apply_command(matches, query: str) -> List[Message]:
+    def apply_command(matches: Collection, query: str) -> List[Message]:
         match_id = query
 
         check: Union[Message, ObjectId] = Command.check_match_id(match_id, "state")

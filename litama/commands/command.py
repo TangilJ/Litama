@@ -1,7 +1,8 @@
-from typing import List, Dict, Union
+from typing import List, Dict, Union, Any
 
 import bson
 from bson import ObjectId
+from pymongo.collection import Collection
 
 from commands.message import Message
 from structures import GameState
@@ -15,11 +16,11 @@ class Command:
         return query.startswith(cls.STARTS_WITH)
 
     @staticmethod
-    def apply_command(matches, query: str) -> List[Message]:
+    def apply_command(matches: Collection, query: str) -> List[Message]:
         pass
 
     @staticmethod
-    def error_msg(error: str, attempted_query: str, match_id="") -> Message:
+    def error_msg(error: str, attempted_query: str, match_id: str = "") -> Message:
         return Message(
             {
                 "messageType": "error",
@@ -39,7 +40,7 @@ class Command:
             return Command.error_msg("matchId was in an incorrect format", message_type, match_id)
 
     @staticmethod
-    def generate_state_dict(match: Dict) -> Dict:
+    def generate_state_dict(match: Dict[str, Any]) -> Dict[str, str]:
         if match["gameState"] == GameState.WAITING_FOR_PLAYER.value:
             return {
                 "messageType": "state",

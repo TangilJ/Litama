@@ -1,6 +1,8 @@
 from secrets import token_hex
 from typing import List, Union
 
+from pymongo.collection import Collection
+
 from commands.command import Command
 from commands.message import Message
 from conversions import board_to_str
@@ -13,7 +15,7 @@ class Join(Command):
     STARTS_WITH = "join "
 
     @staticmethod
-    def apply_command(matches, query: str) -> List[Message]:
+    def apply_command(matches: Collection, query: str) -> List[Message]:
         split = query.split(" ")
         match_id = split[0]
 
@@ -73,7 +75,7 @@ class Join(Command):
                 match_id
             ),
             Message(
-                Command.generate_state_dict(matches.find_one({"_id": object_id})),
+                Command.generate_state_dict(matches.find_one({"_id": object_id})),  # type: ignore
                 False,
                 match_id
             )

@@ -33,7 +33,7 @@ def print_board(b: Board) -> None:
             if b[y][x].color == Player.NONE:
                 ret += "•"
             else:
-                if b[y][x].color == 0:
+                if b[y][x].color == Player.BLUE:
                     ret += "B" if b[y][x].is_master else "b"
                 else:
                     ret += "R" if b[y][x].is_master else "r"

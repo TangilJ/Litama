@@ -2,6 +2,8 @@ from random import random
 from secrets import token_hex
 from typing import List
 
+from pymongo.collection import Collection
+
 from commands.command import Command
 from commands.message import Message
 from structures import GameState
@@ -11,7 +13,7 @@ class Create(Command):
     STARTS_WITH = "create "
 
     @staticmethod
-    def apply_command(matches, query: str) -> List[Message]:
+    def apply_command(matches: Collection, query: str) -> List[Message]:
         username = query
 
         token: str = token_hex(32)

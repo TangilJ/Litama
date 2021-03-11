@@ -1,5 +1,7 @@
 from typing import List, Union
 
+from pymongo.collection import Collection
+
 from commands.command import Command
 from commands.message import Message
 from structures import GameState
@@ -10,7 +12,7 @@ class Spectate(Command):
     STARTS_WITH = "spectate "
 
     @staticmethod
-    def apply_command(matches, query: str) -> List[Message]:
+    def apply_command(matches: Collection, query: str) -> List[Message]:
         match_id = query
 
         check: Union[Message, ObjectId] = Command.check_match_id(match_id, "spectate")
@@ -35,7 +37,7 @@ class Spectate(Command):
                 True
             ),
             Message(
-                Command.generate_state_dict(matches.find_one({"_id": object_id})),
+                Command.generate_state_dict(matches.find_one({"_id": object_id})),  # type: ignore
                 False,
                 match_id
             )
