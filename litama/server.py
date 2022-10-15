@@ -12,6 +12,7 @@ from pymongo.collection import Collection
 
 from commands.command import Command
 from commands.create import Create
+from commands.create_custom import CreateCustom
 from commands.join import Join
 from commands.message import Message
 from commands.move import Move
@@ -30,7 +31,7 @@ game_clients: Dict[str, Set[WebSocket]] = {}
 StateDict = Dict[str, Union[bool, str, List[str], Dict[str, Union[List[str], str]]]]
 CommandResponse = Dict[str, Union[bool, str]]
 
-commands: List[Type[Command]] = [Create, Join, State, Move, Spectate]
+commands: List[Type[Command]] = [CreateCustom, Create, Join, State, Move, Spectate]
 
 
 @sockets.route("/")  # type: ignore

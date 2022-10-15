@@ -31,9 +31,15 @@ class Join(Command):
         if match["gameState"] != GameState.WAITING_FOR_PLAYER.value:
             return [Command.error_msg("Not allowed to join", "join", match_id)]
 
+        custom_cards = "cards" in match
+
         token: str = token_hex(32)
         color: str = "red" if match["tokenRed"] == "" else "blue"
-        board, blue_cards, red_cards, side_card = init_game()
+        if custom_cards:
+            board, blue_cards, red_cards, side_card = init_game()
+        else:
+            board, _, _, _ = init_game()
+            blue_cards, red_cards, side_card = custom_cards[0:2], custom_cards[2:4], custom_cards[4]
         usernames = match["usernames"]
         usernames[color] = username
         indices = match["indices"]
